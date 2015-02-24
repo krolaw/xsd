@@ -2,24 +2,12 @@ package xsd
 
 /*
 #cgo pkg-config: libxml-2.0
-//#include <libxml/valid.h>
 #include <libxml/xmlschemas.h>
-//#include <stdio.h>
-
-//static inline xmlSchemaValidityErrorFunc *getSchemaValidityErrorFunc() { return schemaValidityErrorFunc; }
-//static inline void free_string(char* s) { free(s); }
-//static inline xmlChar *to_xmlcharptr(const char *s) { return (xmlChar *)s; }
-//static inline char *to_charptr(const xmlChar *s) { return (char *)s; }
-//void xmlSchemaValidityErrorFunc	(void * ctx, const char * ms, ... )
-
 */
 import "C"
 
 import (
-	//"github.com/jbussdieker/golibxml"
-
 	"errors"
-	//"fmt"
 	"runtime"
 	"unsafe"
 )
