@@ -6,7 +6,7 @@ import (
 	// Any package that exposes the document's libxml2's xmlDocPtr will do.
 	// This one seemed rather straight forward, but others should be fine.
 	"github.com/jbussdieker/golibxml"
-	"xsd"
+	"github.com/krolaw/xsd"
 
 	"fmt"
 	"unsafe"
