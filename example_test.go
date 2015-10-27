@@ -45,7 +45,7 @@ func ExampleSchema_Validate() {
 
 	// golibxml._Ctype_xmlDocPtr can't be cast to xsd.DocPtr, even though they are both
 	// essentially _Ctype_xmlDocPtr.  Using unsafe gets around this.
-	if err := xsdSchema.Validate(xsd.DocPtr(unsafe.Pointer(doc.Ptr))); err != nil {
+	if err := xsdSchema.Validate(xsd.DocPtr(unsafe.Pointer(doc.Ptr)), func(x string) { fmt.Printf("Message from handler #1: %s\n", x) }); err != nil {
 		fmt.Println(err)
 		return
 	}
