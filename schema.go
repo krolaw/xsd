@@ -2,14 +2,50 @@ package xsd
 
 /*
 #cgo pkg-config: libxml-2.0
+#include <stdlib.h>
 #include <libxml/xmlschemas.h>
+
+extern void SchemaValidationErrorHandler(char *msg, xmlSchemaValidCtxtPtr *ctx, char *id);
+
+
+static inline void HandleValidationError(void *ctx, const char *format, ...) {
+	char *id;
+	id = ctx;
+
+    char *errMsg;
+    va_list args;
+    va_start(args, format);
+    vasprintf(&errMsg, format, args);
+    va_end(args);
+	SchemaValidationErrorHandler(errMsg, ctx, id);
+    free(errMsg);
+}
+
+static inline int XsdValidateSchema(xmlSchemaValidCtxtPtr ctxt,	xmlDocPtr doc, char *id){
+
+	xmlSetStructuredErrorFunc(NULL, NULL);
+    xmlSchemaSetValidErrors(ctxt,
+                            HandleValidationError,
+                            NULL,
+                            id);
+	return xmlSchemaValidateDoc(ctxt, doc);
+}
+
+
 */
 import "C"
 
 import (
 	"errors"
+	"fmt"
 	"runtime"
 	"unsafe"
+)
+
+type ErrorHandler func(string)
+
+var (
+	callbackMap map[string]ErrorHandler
 )
 
 type Schema struct {
@@ -18,14 +54,16 @@ type Schema struct {
 
 type DocPtr C.xmlDocPtr
 
-/*
-//export schemaValidityErrorFunc
-// This was one idea I wanted to use to extract the error.  It doesn't work
-// because ...[]interface{} makes the func unexportable.  Not sure what to
-// replace this with. - help please
-func schemaValidityErrorFunc(ctx unsafe.Pointer, format *C.char, values ...[]interface{}) {
-	*(*error)(ctx) = fmt.Errorf(C.GoString(format), values...)
-}*/
+//export SchemaValidationErrorHandler
+func SchemaValidationErrorHandler(msg *C.char, ctx *C.xmlSchemaValidCtxtPtr, id *C.char) {
+	// input is an error message as pointer to char array
+	errorMessage := C.GoString(msg)
+	cid := C.GoString(id)
+
+	if handler, ok := callbackMap[cid]; ok == true {
+		handler(errorMessage)
+	}
+}
 
 // ParseSchema creates new Schema from []byte containing xml schema data.
 // Will probably change []byte to DocPtr.
@@ -37,7 +75,7 @@ func ParseSchema(buffer []byte) (*Schema, error) {
 	defer C.xmlSchemaFreeParserCtxt(cSchemaNewMemParserCtxt)
 	cSchema := C.xmlSchemaParse(cSchemaNewMemParserCtxt)
 	if cSchema == nil {
-		return nil, errors.New("Could not parse schema") // TODO extract error - see Validate func below
+		return nil, errors.New("Could not parse schema")
 	}
 	return makeSchema(cSchema), nil
 }
@@ -56,7 +94,11 @@ func makeSchema(cSchema C.xmlSchemaPtr) *Schema {
 // the schema, an error is returned, nil otherwise.
 // At the moment, the error just says that the document failed.  It doesn't
 // say where and why.  It needs to - help greatly appreciated.
-func (s *Schema) Validate(doc DocPtr) error {
+func (s *Schema) Validate(doc DocPtr, handler ErrorHandler) error {
+	if callbackMap == nil {
+		callbackMap = make(map[string]ErrorHandler)
+	}
+
 	validCtxt := C.xmlSchemaNewValidCtxt(s.Ptr)
 	if validCtxt == nil {
 		// TODO find error - see below
@@ -64,20 +106,16 @@ func (s *Schema) Validate(doc DocPtr) error {
 	}
 	defer C.xmlSchemaFreeValidCtxt(validCtxt)
 
-	/*
-		// My plan was to register my go func to receive errors and pass it an
-		// error ptr specific to this validation (useful for multiple goroutines).
-		// Alas it doesn't work, help appreciated.
+	contextAddr := fmt.Sprintf("%p", &validCtxt)
+	cContextAddr := C.CString(contextAddr)
 
-		var err *error
-		if C.xmlSchemaGetValidErrors(validCtxt, C.schemaValidityErrorFunc, nil, unsafe.Pointer(err)) == -1 {
-			return errors.New("Could not set error func.")
-		}
-	*/
+	callbackMap[contextAddr] = handler
+	defer delete(callbackMap, contextAddr)
 
-	if C.xmlSchemaValidateDoc(validCtxt, doc) != 0 {
-		//return errors.New(*err) // When the above works
+	result := int(C.XsdValidateSchema(validCtxt, doc, cContextAddr))
+	if result != 0 {
 		return errors.New("Document validation error")
 	}
+
 	return nil
 }
