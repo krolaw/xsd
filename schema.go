@@ -32,7 +32,8 @@ func schemaValidityErrorFunc(ctx unsafe.Pointer, format *C.char, values ...[]int
 }*/
 
 var validationErrorsMu sync.Mutex
-var validationErrors = [][]string{}
+var validationErrors = map[int][]string{}
+var validationErrorsNextIndex = 0
 
 //export xmlErrorFunc
 func xmlErrorFunc(id int, msg *C.char) {
@@ -79,12 +80,13 @@ func (s *Schema) Validate(doc DocPtr) error {
 	defer C.xmlSchemaFreeValidCtxt(validCtxt)
 
 	validationErrorsMu.Lock()
-	id := len(validationErrors)
-	validationErrors = append(validationErrors, []string{})
+	validationErrorsNextIndex++
+	id := validationErrorsNextIndex
+	validationErrors[id] = []string{}
 	validationErrorsMu.Unlock()
 	defer func() {
 		validationErrorsMu.Lock()
-		validationErrors[id] = nil
+		delete(validationErrors, id)
 		validationErrorsMu.Unlock()
 	}()
 	C.xmlSchemaSetValidErrors(validCtxt,
