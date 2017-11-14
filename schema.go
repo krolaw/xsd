@@ -3,12 +3,16 @@ package xsd
 /*
 #cgo pkg-config: libxml-2.0
 #include <libxml/xmlschemas.h>
+
+void xmlErrorFunc_cgo(void *, const char *); // Forward declaration.
 */
 import "C"
 
 import (
 	"errors"
 	"runtime"
+	"strings"
+	"sync"
 	"unsafe"
 )
 
@@ -26,6 +30,17 @@ type DocPtr C.xmlDocPtr
 func schemaValidityErrorFunc(ctx unsafe.Pointer, format *C.char, values ...[]interface{}) {
 	*(*error)(ctx) = fmt.Errorf(C.GoString(format), values...)
 }*/
+
+var validationErrorsMu sync.Mutex
+var validationErrors = map[int][]string{}
+var validationErrorsNextIndex = 0
+
+//export xmlErrorFunc
+func xmlErrorFunc(id int, msg *C.char) {
+	validationErrorsMu.Lock()
+	validationErrors[id] = append(validationErrors[id], C.GoString(msg))
+	validationErrorsMu.Unlock()
+}
 
 // ParseSchema creates new Schema from []byte containing xml schema data.
 // Will probably change []byte to DocPtr.
@@ -64,6 +79,21 @@ func (s *Schema) Validate(doc DocPtr) error {
 	}
 	defer C.xmlSchemaFreeValidCtxt(validCtxt)
 
+	validationErrorsMu.Lock()
+	validationErrorsNextIndex++
+	id := validationErrorsNextIndex
+	validationErrors[id] = []string{}
+	validationErrorsMu.Unlock()
+	defer func() {
+		validationErrorsMu.Lock()
+		delete(validationErrors, id)
+		validationErrorsMu.Unlock()
+	}()
+	C.xmlSchemaSetValidErrors(validCtxt,
+		(C.xmlSchemaValidityErrorFunc)(unsafe.Pointer(C.xmlErrorFunc_cgo)),
+		(C.xmlSchemaValidityErrorFunc)(unsafe.Pointer(C.xmlErrorFunc_cgo)),
+		unsafe.Pointer(&id),
+	)
 	/*
 		// My plan was to register my go func to receive errors and pass it an
 		// error ptr specific to this validation (useful for multiple goroutines).
@@ -77,7 +107,7 @@ func (s *Schema) Validate(doc DocPtr) error {
 
 	if C.xmlSchemaValidateDoc(validCtxt, doc) != 0 {
 		//return errors.New(*err) // When the above works
-		return errors.New("Document validation error")
+		return errors.New(strings.Join(validationErrors[id], ""))
 	}
 	return nil
 }
