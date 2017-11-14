@@ -8,8 +8,7 @@ package xsd
 // The gateway function
 void xmlErrorFunc_cgo(void *ctx, const char * msg, ...)
 {
-    int *id = (int*)ctx;
-    void xmlErrorFunc(int, const char *);
+    void xmlErrorFunc(void *ctx, const char *);
 
     char buf[1024];
     va_list args;
@@ -17,7 +16,7 @@ void xmlErrorFunc_cgo(void *ctx, const char * msg, ...)
     int len = vsnprintf(buf, sizeof(buf), msg, args);
     va_end(args);
 
-    xmlErrorFunc(*id, buf);
+    xmlErrorFunc(ctx, buf);
 }
 */
 import "C"

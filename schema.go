@@ -12,7 +12,6 @@ import (
 	"errors"
 	"runtime"
 	"strings"
-	"sync"
 	"unsafe"
 )
 
@@ -22,15 +21,13 @@ type Schema struct {
 
 type DocPtr C.xmlDocPtr
 
-var validationErrorsMu sync.Mutex
-var validationErrors = map[int][]string{}
-var validationErrorsNextIndex = 0
-
 //export xmlErrorFunc
-func xmlErrorFunc(id int, msg *C.char) {
-	validationErrorsMu.Lock()
-	validationErrors[id] = append(validationErrors[id], C.GoString(msg))
-	validationErrorsMu.Unlock()
+func xmlErrorFunc(id unsafe.Pointer, msg *C.char) {
+
+	errs := (*[]string)(unsafe.Pointer(id))
+
+	//errs := (*[]string)(unsafe.Pointer(id))
+	*errs = append(*errs, C.GoString(msg))
 }
 
 // ParseSchema creates new Schema from []byte containing xml schema data.
@@ -63,31 +60,21 @@ func makeSchema(cSchema C.xmlSchemaPtr) *Schema {
 func (s *Schema) Validate(doc DocPtr) error {
 	validCtxt := C.xmlSchemaNewValidCtxt(s.Ptr)
 	if validCtxt == nil {
-		// TODO find error - see below
+		// TODO find error
 		return errors.New("Could not build validator")
 	}
 	defer C.xmlSchemaFreeValidCtxt(validCtxt)
 
-	validationErrorsMu.Lock()
-	validationErrorsNextIndex++
-	id := validationErrorsNextIndex
-	validationErrors[id] = []string{}
-	validationErrorsMu.Unlock()
-
-	defer func() {
-		validationErrorsMu.Lock()
-		delete(validationErrors, id)
-		validationErrorsMu.Unlock()
-	}()
+	validationErrors := []string{}
 
 	C.xmlSchemaSetValidErrors(validCtxt,
 		(C.xmlSchemaValidityErrorFunc)(unsafe.Pointer(C.xmlErrorFunc_cgo)),
 		(C.xmlSchemaValidityErrorFunc)(unsafe.Pointer(C.xmlErrorFunc_cgo)),
-		unsafe.Pointer(&id),
+		unsafe.Pointer(&validationErrors),
 	)
 
 	if C.xmlSchemaValidateDoc(validCtxt, doc) != 0 {
-		return errors.New(strings.Join(validationErrors[id], ""))
+		return errors.New(strings.Join(validationErrors, ""))
 	}
 	return nil
 }
