@@ -23,10 +23,7 @@ type DocPtr C.xmlDocPtr
 
 //export xmlErrorFunc
 func xmlErrorFunc(id unsafe.Pointer, msg *C.char) {
-
-	errs := (*[]string)(unsafe.Pointer(id))
-
-	//errs := (*[]string)(unsafe.Pointer(id))
+	errs := (*SchemaErrors)(id)
 	*errs = append(*errs, C.GoString(msg))
 }
 
@@ -55,17 +52,23 @@ func makeSchema(cSchema C.xmlSchemaPtr) *Schema {
 	return s
 }
 
+type SchemaErrors []string
+
+func (e SchemaErrors) Error() string {
+	return strings.Join(e, "")
+}
+
 // Validate uses its Schema to check an xml doc.  If the doc fails to match
-// the schema, an error is returned, nil otherwise.
-func (s *Schema) Validate(doc DocPtr) error {
+// the schema, a list of errors is returned, nil otherwise.
+func (s *Schema) Validate(doc DocPtr) SchemaErrors {
 	validCtxt := C.xmlSchemaNewValidCtxt(s.Ptr)
 	if validCtxt == nil {
 		// TODO find error
-		return errors.New("Could not build validator")
+		return SchemaErrors{"Could not build validator"}
 	}
 	defer C.xmlSchemaFreeValidCtxt(validCtxt)
 
-	validationErrors := []string{}
+	validationErrors := SchemaErrors{}
 
 	C.xmlSchemaSetValidErrors(validCtxt,
 		(C.xmlSchemaValidityErrorFunc)(unsafe.Pointer(C.xmlErrorFunc_cgo)),
@@ -74,7 +77,7 @@ func (s *Schema) Validate(doc DocPtr) error {
 	)
 
 	if C.xmlSchemaValidateDoc(validCtxt, doc) != 0 {
-		return errors.New(strings.Join(validationErrors, ""))
+		return validationErrors
 	}
 	return nil
 }
