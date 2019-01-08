@@ -12,4 +12,8 @@ http://godoc.org/github.com/krolaw/xsd
 
 ## Special Thanks
 
-Special thanks to [Michal Pristas](https://github.com/michalpristas) and [Travis Cline](https://github.com/tmc) for independently providing solutions for returning validation errors. 
+Special thanks to [Michal Pristas](https://github.com/michalpristas) and [Travis Cline](https://github.com/tmc) for independently providing solutions for returning validation errors.
+
+## WOW!
+
+An employee of HP Inc requested I attach a licence so it could be used in their "FitStation" platform - Awesome.
